@@ -12,6 +12,14 @@ Generate note titles via a **local LLM** — default [LMStudio](https://lmstudio
 - **Thinking off by default** (`reasoning_effort:"none"`) — fast and stable; can be turned on for reasoning models.
 - **Customizable System prompt** (write your own rules); timestamp format / regex / scan folders all configurable.
 
+## Privacy & permissions
+
+- **Local only.** The plugin's only network traffic is to the **local LLM server you configure** (`http://127.0.0.1:1234` by default — LMStudio / Ollama / vLLM). No data leaves your machine; no third-party or cloud service is contacted.
+- **What is read.** The *Generate title* command reads only the **current note's content**. The *Scan and title all timestamp notes* command lists markdown filenames (`vault.getMarkdownFiles`) to find timestamp-pattern notes, and reads a matched note's content **only when generating that note's title**.
+- **Why enumeration is needed.** Batch-titling timestamp notes requires scanning filenames. It is scoped to your configured scan folders (empty = whole vault) and only **filenames** are matched against the timestamp pattern.
+- **What is written.** The plugin renames files via `fileManager.renameFile` (which also updates links/backlinks). It writes nothing else except its own settings (`data.json` in the plugin folder).
+- **No analytics, no telemetry.** Nothing about your vault or usage is collected or transmitted.
+
 ## Prerequisites
 
 1. Install & start LMStudio, enable the local server in the Developer tab (default `http://127.0.0.1:1234`), and load a chat model (or enable JIT auto-load).
