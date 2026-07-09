@@ -1,0 +1,7 @@
+node_modules/
+main.js
+*.log
+data.json
+.DS_Store
+test/out.mjs
+test/integration-out.mjs
