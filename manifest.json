@@ -1,7 +1,7 @@
 {
 	"id": "llm-auto-title",
 	"name": "LLM Auto Title",
-	"version": "0.2.2",
+	"version": "0.2.3",
 	"minAppVersion": "1.8.7",
 	"description": "Generate note titles via a local LLM (LMStudio by default; any OpenAI-compat server). Hotkey to title the current note; batch-rename timestamp notes. UI auto-localizes (English / 中文).",
 	"author": "slow-coding",
