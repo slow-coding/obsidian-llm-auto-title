@@ -1,13 +1,14 @@
 {
 	"name": "obsidian-llm-auto-title",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"description": "Obsidian plugin: generate note titles via a local LLM (LMStudio by default, any OpenAI-compat server).",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"lint": "eslint ."
+		"lint": "eslint .",
+		"lint:types": "LINT_STRICT_TYPES=1 eslint ."
 	},
 	"keywords": [
 		"obsidian",
