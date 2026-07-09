@@ -1,6 +1,6 @@
-import { Notice, Plugin, TFile } from "obsidian";
+import { getLanguage, Notice, Plugin } from "obsidian";
 import { AutoTitleSettingTab, AutoTitleSettings, DEFAULT_SETTINGS } from "./settings";
-import { t } from "./i18n";
+import { setLang, t } from "./i18n";
 import { LMStudioClient } from "./lmstudio";
 import { generateForFile, shouldScanTarget } from "./title";
 
@@ -12,6 +12,7 @@ export default class AutoTitlePlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
+		setLang(getLanguage());
 		this.lmstudio = new LMStudioClient(() => this.settings);
 
 		this.addSettingTab(new AutoTitleSettingTab(this.app, this));
@@ -77,19 +78,16 @@ export default class AutoTitlePlugin extends Plugin {
 	private async setDefaultHotkey(): Promise<void> {
 		try {
 			const adapter = this.app.vault.adapter;
-			const path = ".obsidian/hotkeys.json";
+			const path = `${this.app.vault.configDir}/hotkeys.json`;
 			let raw = "";
 			try {
 				raw = await adapter.read(path);
 			} catch {
 				raw = "{}";
 			}
-			let hotkeys: Record<string, unknown>;
-			try {
-				hotkeys = raw.trim() ? JSON.parse(raw) : {};
-			} catch {
-				return; // corrupt file — don't touch
-			}
+			const parsed = raw.trim() ? (JSON.parse(raw) as unknown) : {};
+			if (!parsed || typeof parsed !== "object") return; // corrupt — don't touch
+			const hotkeys = parsed as Record<string, unknown>;
 			const key = `${this.manifest.id}:generate-title`;
 			if (hotkeys[key] !== undefined) return; // user already bound or cleared it — respect
 			hotkeys[key] = [{ modifiers: ["Mod", "Shift"], key: "T" }];

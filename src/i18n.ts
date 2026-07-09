@@ -1,31 +1,21 @@
 /**
- * Minimal i18n. Language is detected from Obsidian's `language` localStorage
- * value (with global `moment.locale()` as a fallback); defaults to English.
- * Add a locale + strings below to support more languages.
+ * Minimal i18n. The active language is set once from the host via
+ * `setLang(app.getLanguage())` (called by the plugin in onload); defaults to
+ * English until then. Add a locale + strings below to support more languages.
  */
 
 export type Lang = "en" | "zh";
 
 let cached: Lang | null = null;
 
+/** Set the active language from Obsidian's `App#getLanguage()`. Call once in onload. */
+export function setLang(locale: string): void {
+	cached = locale.toLowerCase().startsWith("zh") ? "zh" : "en";
+}
+
 export function getLang(): Lang {
 	if (cached) return cached;
-	let loc = "";
-	try {
-		const ls = typeof localStorage !== "undefined" ? localStorage.getItem("language") : null;
-		if (ls) loc = ls;
-	} catch {
-		/* ignore */
-	}
-	if (!loc) {
-		try {
-			const m = (globalThis as { moment?: { locale?: () => string } }).moment;
-			if (m && typeof m.locale === "function") loc = m.locale();
-		} catch {
-			/* ignore */
-		}
-	}
-	cached = loc.toLowerCase().startsWith("zh") ? "zh" : "en";
+	cached = "en";
 	return cached;
 }
 

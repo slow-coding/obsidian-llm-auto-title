@@ -81,7 +81,6 @@ export class AutoTitleSettingTab extends PluginSettingTab {
 			.setDesc(t("set.baseUrl.desc"))
 			.addText((text) =>
 				text
-					.setPlaceholder("http://127.0.0.1:1234")
 					.setValue(s.baseUrl)
 					.onChange(async (v) => {
 						s.baseUrl = v.trim().replace(/\/+$/, "");
@@ -132,10 +131,10 @@ export class AutoTitleSettingTab extends PluginSettingTab {
 						new Notice(t("notice.noModels"));
 						return;
 					}
-					new ModelSuggestModal(this.app, models, async (id) => {
+					new ModelSuggestModal(this.app, models, (id) => {
 						s.model = id;
 						modelText.setValue(id);
-						await save();
+						void save();
 						new Notice(t("notice.picked", { model: id }));
 					}).open();
 				})
@@ -166,7 +165,6 @@ export class AutoTitleSettingTab extends PluginSettingTab {
 			.addSlider((sl) =>
 				sl.setLimits(0, 1, 0.05)
 					.setValue(s.temperature)
-					.setDynamicTooltip()
 					.onChange(async (v) => {
 						s.temperature = v;
 						await save();
@@ -278,7 +276,6 @@ export class AutoTitleSettingTab extends PluginSettingTab {
 			.setDesc(this.formatPreview(s.timestampFormat));
 		fmtSetting.addText((text) =>
 			text
-				.setPlaceholder("YYYYMMDD_HHmmss")
 				.setValue(s.timestampFormat)
 				.onChange(async (v) => {
 					s.timestampFormat = v.trim();
@@ -292,7 +289,6 @@ export class AutoTitleSettingTab extends PluginSettingTab {
 			.setDesc(this.regexPreview(s.customRegex));
 		reSetting.addText((text) =>
 			text
-				.setPlaceholder("e.g. ^note-\\d+$")
 				.setValue(s.customRegex)
 				.onChange(async (v) => {
 					s.customRegex = v;

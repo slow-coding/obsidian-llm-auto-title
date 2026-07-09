@@ -107,13 +107,14 @@ export function sanitizeTitle(raw: string, maxLen: number): string {
 	t = t.replace(/^\s*<[^>]+>\s*/, "").replace(/\s*<\/[^>]+>\s*$/, "");
 	// strip wrapping quotes (ASCII + CJK)
 	t = t.replace(/^["'“”‘’「『]+|["'“”‘’」』]+$/g, "");
-	// strip wrapping markdown emphasis/code/heading/bullet
-	t = t.replace(/^\*\*(.+)\*\*$/, "$1")
+	// strip wrapping markdown emphasis/code/heading/bullet, and [[wikilink]] wrapper
+	t = t.replace(/^\[\[(.+)\]\]$/, "$1")
+		.replace(/^\*\*(.+)\*\*$/, "$1")
 		.replace(/^__(.+)__$/, "$1")
 		.replace(/^[\s`*_~#>-]+/, "")
 		.replace(/[\s`*_~]+$/, "");
-	// invalid filename chars (cross-platform, incl. brackets) → space
-	t = t.replace(/[\\/:*?"<>|\[\]\x00-\x1f]/g, " ");
+	// invalid filename chars (cross-platform) → space
+	t = t.replace(/[\\/:*?"<>|]/g, " ");
 	// fullwidth invalid chars → space
 	t = t.replace(/[：＊？／＼＂＜＞｜]/g, " ");
 	// collapse whitespace
@@ -158,3 +159,14 @@ export function uniquePath(vault: Vault, folder: TFolder, baseName: string, igno
 	}
 	return path;
 }
+
+/** Type guard: a non-null plain object. */
+export function isObject(v: unknown): v is Record<string, unknown> {
+	return typeof v === "object" && v !== null;
+}
+
+/** Type guard: an array narrowed to `unknown[]` (avoids the `any[]` from Array.isArray). */
+export function isUnknownArray(v: unknown): v is unknown[] {
+	return Array.isArray(v);
+}
+

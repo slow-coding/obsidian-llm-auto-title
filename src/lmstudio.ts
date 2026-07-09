@@ -1,7 +1,7 @@
-import { requestUrl } from "obsidian";
+import { requestUrl, type RequestUrlResponse } from "obsidian";
 import { defaultSystemPrompt, t } from "./i18n";
 import { type AutoTitleSettings } from "./settings";
-import { truncate } from "./util";
+import { isObject, isUnknownArray, truncate } from "./util";
 
 export type TitleErrorKind =
 	| "unreachable"
@@ -33,7 +33,7 @@ export class LMStudioClient {
 	/** List chat model ids from /v1/models, filtering out embedding models. Throws on error. */
 	async listModels(): Promise<string[]> {
 		const headers = this.authHeader();
-		let res;
+		let res: RequestUrlResponse;
 		try {
 			res = await requestUrl({
 				url: `${this.baseUrl}/v1/models`,
@@ -47,12 +47,12 @@ export class LMStudioClient {
 		if (res.status >= 400) {
 			throw new Error(`HTTP ${res.status}: ${(res.text ?? "").slice(0, 200)}`);
 		}
-		const data = res.json?.data;
-		if (!Array.isArray(data)) return [];
+		const json: unknown = res.json;
+		const data = isObject(json) ? json.data : undefined;
+		if (!isUnknownArray(data)) return [];
 		const ids: string[] = [];
 		for (const m of data) {
-			const id = m?.id;
-			if (typeof id === "string" && id && !/embed/i.test(id)) ids.push(id);
+			if (isObject(m) && typeof m.id === "string" && m.id && !/embed/i.test(m.id)) ids.push(m.id);
 		}
 		return ids.sort();
 	}
@@ -95,7 +95,7 @@ export class LMStudioClient {
 
 		const headers = this.authHeader();
 
-		let res;
+		let res: RequestUrlResponse;
 		try {
 			res = await Promise.race([
 				requestUrl({
@@ -127,15 +127,16 @@ export class LMStudioClient {
 			};
 		}
 
-		const choices = res.json?.choices;
-		const choice = Array.isArray(choices) && choices.length > 0 ? choices[0] : null;
-		if (!choice) {
+		const json: unknown = res.json;
+		const choices = isObject(json) && isUnknownArray(json.choices) ? json.choices : [];
+		const choice = choices.length > 0 ? choices[0] : null;
+		if (!choice || !isObject(choice)) {
 			return { ok: false, kind: "empty", message: t("err.noChoices") };
 		}
 
-		const message = choice.message ?? {};
+		const message = isObject(choice.message) ? choice.message : {};
 		const content0 = typeof message.content === "string" ? message.content.trim() : "";
-		const finishReason = choice.finish_reason;
+		const finishReason = typeof choice.finish_reason === "string" ? choice.finish_reason : "";
 
 		if (content0) {
 			return { ok: true, title: content0 };
