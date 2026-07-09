@@ -1,5 +1,7 @@
 # LLM Auto Title (Obsidian plugin)
 
+![demo](assets/demo.gif)
+
 Generate note titles via a **local LLM** — default [LMStudio](https://lmstudio.ai), works with any OpenAI-compatible server (Ollama, vLLM, …). Renames use `fileManager.renameFile`, so backlinks update automatically. The UI auto-localizes (**English / 中文**) based on Obsidian's language.
 
 ## Features
