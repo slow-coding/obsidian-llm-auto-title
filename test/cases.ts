@@ -91,6 +91,7 @@ eq("unknown key falls back to key", t("nope.notreal"), "nope.notreal");
 eq("default system prompt (en) mentions title", defaultSystemPrompt().toLowerCase().includes("title"), true);
 eq("excludeSuffix interpolates list", t("prompt.excludeSuffix", { list: "- Foo\n- Bar" }).includes("- Foo"), true);
 eq("noNewTitle interpolates n", t("notice.noNewTitle", { n: 3 }).includes("3"), true);
+eq("prefixTimestamp name present", t("set.prefixTimestamp.name").length > 0, true);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

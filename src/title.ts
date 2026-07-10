@@ -67,6 +67,26 @@ function liveEditorContent(app: App, file: TFile): string | null {
 	return null;
 }
 
+/** If `basename` starts with a timestamp matching the detection `pattern`,
+ *  return that leading timestamp; otherwise null. Supports a bare timestamp
+ *  ("20260709_143022") and an already-prefixed name ("20260709_143022 Title")
+ *  so re-triggering keeps the timestamp. Strips the pattern's trailing `$` to
+ *  match a leading prefix instead of the whole basename. */
+function timestampPrefixOf(pattern: RegExp, basename: string): string | null {
+	// 1. Precise: match the detection pattern at the start of the basename.
+	//    Handles space-containing formats too (e.g. "YYYY-MM-DD HH.mm.ss").
+	const precise = new RegExp(pattern.source.replace(/\$$/, "")).exec(basename);
+	if (precise?.[0]) return precise[0];
+	// 2. Fallback: when the pattern doesn't fit the actual name (e.g. format is
+	//    YYMMDD but the note is YYYYMMDD — a 2/4-digit-year mismatch, or any
+	//    other format/file divergence), take the leading run of digits +
+	//    separators before the first space. Only fires for digit-led names, so
+	//    ordinary names ("meeting notes") are left untouched.
+	const firstToken = basename.split(" ")[0] ?? "";
+	if (firstToken && /^\d[\d_.\-:/]+$/.test(firstToken)) return firstToken;
+	return null;
+}
+
 /**
  * Orchestrate: read → generate → sanitize → dedupe → rename.
  * `manual` only affects user-facing notices (the manual command shows more
@@ -226,6 +246,19 @@ export async function generateForFile(plugin: AutoTitlePlugin, file: TFile, manu
 		notice.hide();
 		if (manual) new Notice(t("notice.same"));
 		return;
+	}
+
+	// Optional: keep the timestamp prefix (e.g. "20260709_143022 <title>") on
+	// timestamp notes so the sortable timestamp survives. Matches the basename's
+	// leading timestamp (bare or already-prefixed) so a re-trigger keeps it and
+	// only swaps the title part. The prefix is added AFTER recording history, so
+	// dedup compares the LLM title, not the timestamp+title combo.
+	if (s.prefixTimestamp) {
+		const pattern = resolvePattern(s);
+		const ts = pattern ? timestampPrefixOf(pattern, latest.basename) : null;
+		if (ts) {
+			title = `${ts} ${title}`;
+		}
 	}
 
 	const folder = latest.parent ?? plugin.app.vault.getRoot();

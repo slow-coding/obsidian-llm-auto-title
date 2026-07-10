@@ -17,6 +17,9 @@ function ok(name: string, cond: boolean, extra = ""): void {
 }
 
 const settings: AutoTitleSettings = { ...DEFAULT_SETTINGS };
+// Default tests to prefix OFF so they assert the raw LLM title; the prefix
+// behavior is exercised explicitly in its own block below.
+settings.prefixTimestamp = false;
 
 // ---- in-memory fake vault ----
 const root: any = new TFolder({ path: "", _root: true, children: [] });
@@ -148,6 +151,36 @@ async function main(): Promise<void> {
 	ok("new basename is the novel title", dedupNote.basename === "novel title", dedupNote.basename);
 	ok("history migrated to new path", plugin.sessionTitles.has("novel title.md"), JSON.stringify([...plugin.sessionTitles.keys()]));
 	ok("old path removed from history", !plugin.sessionTitles.has(dedupPath));
+
+	console.log("\nprefixTimestamp (keep \"<timestamp> <title>\"):");
+	reset();
+	settings.prefixTimestamp = true;
+	const ptNote = addFile("20260710_080000.md", "content about the prefix timestamp feature");
+	mock.responses.push({ status: 200, text: "", json: { choices: [{ index: 0, message: { content: "Prefix feature" }, finish_reason: "stop" }] } });
+	await generateForFile(plugin, ptNote, true);
+	ok("timestamp note titled \"<ts> <title>\"", ptNote.basename === "20260710_080000 Prefix feature", ptNote.basename);
+	// non-timestamp note is unaffected even with the toggle on
+	reset();
+	const ntNote = addFile("meeting-notes.md", "some meeting content here");
+	mock.responses.push({ status: 200, text: "", json: { choices: [{ index: 0, message: { content: "Meeting" }, finish_reason: "stop" }] } });
+	await generateForFile(plugin, ntNote, true);
+	ok("non-timestamp note has no prefix", ntNote.basename === "Meeting", ntNote.basename);
+	// re-trigger keeps the timestamp, swaps only the title part
+	reset();
+	mock.responses.push({ status: 200, text: "", json: { choices: [{ index: 0, message: { content: "Second Title" }, finish_reason: "stop" }] } });
+	await generateForFile(plugin, ptNote, true);
+	ok("re-trigger keeps ts, swaps title", ptNote.basename === "20260710_080000 Second Title", ptNote.basename);
+	// fallback: format=YYMMDD but the note is YYYYMMDD (2/4-digit-year mismatch) —
+	// the precise pattern misses, so fall back to the digit-led leading token
+	reset();
+	const savedFmt = settings.timestampFormat;
+	settings.timestampFormat = "YYMMDD_HHmmss";
+	const yNote = addFile("20260710_235744.md", "content with a 4-digit-year timestamp name");
+	mock.responses.push({ status: 200, text: "", json: { choices: [{ index: 0, message: { content: "Four Digit" }, finish_reason: "stop" }] } });
+	await generateForFile(plugin, yNote, true);
+	ok("fallback extracts full ts on format mismatch", yNote.basename === "20260710_235744 Four Digit", yNote.basename);
+	settings.timestampFormat = savedFmt;
+	settings.prefixTimestamp = false;
 
 	console.log("\nbudget exhaustion (mocked: empty content + finish=length, reasoning echoes input):");
 	reset();

@@ -22,6 +22,7 @@ export interface AutoTitleSettings {
 	offerTitleOptions: boolean;
 	optionCount: number;
 	repetitionPenalty: number;
+	prefixTimestamp: boolean;
 }
 
 export const DEFAULT_SETTINGS: AutoTitleSettings = {
@@ -43,6 +44,7 @@ export const DEFAULT_SETTINGS: AutoTitleSettings = {
 	offerTitleOptions: false,
 	optionCount: 3,
 	repetitionPenalty: 1.2,
+	prefixTimestamp: true,
 };
 
 /** Fuzzy-picker for selecting a chat model from the server's list. */
@@ -308,6 +310,16 @@ export class AutoTitleSettingTab extends PluginSettingTab {
 			})
 	);
 	repSetting.controlEl.appendChild(repValue);
+
+	new Setting(containerEl)
+		.setName(t("set.prefixTimestamp.name"))
+		.setDesc(t("set.prefixTimestamp.desc"))
+		.addToggle((toggle) =>
+			toggle.setValue(s.prefixTimestamp).onChange(async (v) => {
+				s.prefixTimestamp = v;
+				await save();
+			})
+		);
 
 	// ---------- scan scope ----------
 		new Setting(containerEl).setName(t("set.heading.scope")).setHeading();

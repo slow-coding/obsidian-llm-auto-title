@@ -135,6 +135,11 @@ const STRINGS: Record<string, Entry> = {
 		en: "Higher discourages token reuse (llama.cpp repetition_penalty) so titles — especially the N candidates — differ more. 1.0 = off. Raise it if candidates look too similar.",
 		zh: "越高越抑制 token 重复（llama.cpp repetition_penalty），让标题——尤其 N 个候选项——彼此更不同。1.0 = 关闭。候选项太相似时调高。",
 	},
+	"set.prefixTimestamp.name": { en: "Keep timestamp prefix in title", zh: "标题保留时间戳前缀" },
+	"set.prefixTimestamp.desc": {
+		en: "When on, a timestamp note is titled \"<timestamp> <title>\" (e.g. \"20260709_143022 Q3 review\"), keeping the sortable timestamp. Re-triggering only swaps the title part. On by default; non-timestamp notes are unaffected.",
+		zh: "开启后，时间戳笔记的标题变为「<时间戳> <标题>」（如「20260709_143022 Q3 复盘」），保留可排序的时间戳；重新生成时只替换标题部分。默认开启；非时间戳笔记不受影响。",
+	},
 
 	// ---- settings: scope ----
 	"set.minContent.name": { en: "Min content length", zh: "最小内容长度" },
