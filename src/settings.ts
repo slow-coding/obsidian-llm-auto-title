@@ -21,6 +21,7 @@ export interface AutoTitleSettings {
 	minContentLength: number;
 	offerTitleOptions: boolean;
 	optionCount: number;
+	repetitionPenalty: number;
 }
 
 export const DEFAULT_SETTINGS: AutoTitleSettings = {
@@ -41,6 +42,7 @@ export const DEFAULT_SETTINGS: AutoTitleSettings = {
 	minContentLength: 1,
 	offerTitleOptions: false,
 	optionCount: 3,
+	repetitionPenalty: 1.2,
 };
 
 /** Fuzzy-picker for selecting a chat model from the server's list. */
@@ -163,17 +165,21 @@ export class AutoTitleSettingTab extends PluginSettingTab {
 		// ---------- generation ----------
 		new Setting(containerEl).setName(t("set.heading.params")).setHeading();
 
-		new Setting(containerEl)
+		const tempSetting = new Setting(containerEl)
 			.setName(t("set.temp.name"))
-			.setDesc(t("set.temp.desc"))
-			.addSlider((sl) =>
-				sl.setLimits(0, 1, 0.05)
-					.setValue(s.temperature)
-					.onChange(async (v) => {
-						s.temperature = v;
-						await save();
-					})
-			);
+			.setDesc(t("set.temp.desc"));
+		const tempValue = tempSetting.controlEl.createSpan({ text: s.temperature.toFixed(2) });
+		tempValue.setCssProps({ marginLeft: "0.5em" });
+		tempSetting.addSlider((sl) =>
+			sl.setLimits(0, 1, 0.05)
+				.setValue(s.temperature)
+				.onChange(async (v) => {
+					s.temperature = v;
+					tempValue.setText(v.toFixed(2));
+					await save();
+				})
+		);
+		tempSetting.controlEl.appendChild(tempValue);
 
 		new Setting(containerEl)
 			.setName(t("set.maxTokens.name"))
@@ -286,6 +292,22 @@ export class AutoTitleSettingTab extends PluginSettingTab {
 			}),
 	);
 	optionCountSetting.controlEl.appendChild(optionCountValue);
+
+	const repSetting = new Setting(containerEl)
+		.setName(t("set.repetitionPenalty.name"))
+		.setDesc(t("set.repetitionPenalty.desc"));
+	const repValue = repSetting.controlEl.createSpan({ text: s.repetitionPenalty.toFixed(2) });
+	repValue.setCssProps({ marginLeft: "0.5em" });
+	repSetting.addSlider((sl) =>
+		sl.setLimits(1, 1.5, 0.05)
+			.setValue(s.repetitionPenalty)
+			.onChange(async (v) => {
+				s.repetitionPenalty = v;
+				repValue.setText(v.toFixed(2));
+				await save();
+			})
+	);
+	repSetting.controlEl.appendChild(repValue);
 
 	// ---------- scan scope ----------
 		new Setting(containerEl).setName(t("set.heading.scope")).setHeading();

@@ -2,7 +2,7 @@ import { Notice, normalizePath, TAbstractFile, TFile } from "obsidian";
 import type AutoTitlePlugin from "./main";
 import type { AutoTitleSettings } from "./settings";
 import { t } from "./i18n";
-import { compileUserRegex, momentFormatToRegex, sanitizeTitle, stripExtension, uniquePath } from "./util";
+import { compileUserRegex, isRefusalTitle, momentFormatToRegex, sanitizeTitle, stripExtension, uniquePath } from "./util";
 import { pickTitle } from "./titlePicker";
 
 /** Resolve the active detection regex: custom regex if valid, else the Moment format. null = no valid pattern. */
@@ -98,7 +98,7 @@ export async function generateForFile(plugin: AutoTitlePlugin, file: TFile, manu
 		const cands: string[] = [];
 		for (const raw of opt.titles) {
 			const c = sanitizeTitle(raw, s.titleMaxLength);
-			if (!c) continue;
+			if (!c || isRefusalTitle(c)) continue;
 			const key = c.toLowerCase();
 			if (seen.has(key)) continue;
 			seen.add(key);
@@ -138,6 +138,14 @@ export async function generateForFile(plugin: AutoTitlePlugin, file: TFile, manu
 	if (!title) {
 		notice.hide();
 		new Notice(t("notice.titleEmpty"), 6000);
+		return;
+	}
+	if (isRefusalTitle(title)) {
+		// The model answered with a clarification ("Please provide the note…")
+		// because the note has no usable prose (embed/link/empty). Don't let that
+		// become the filename.
+		notice.hide();
+		new Notice(t("notice.noText"), 6000);
 		return;
 	}
 

@@ -186,6 +186,21 @@ async function main(): Promise<void> {
 		ok("strips numbering inside quotes", !!opt.ok && opt.titles[0] === "Quarterly Review" && opt.titles[1] === "Project Update", JSON.stringify(opt));
 	}
 
+	console.log("\nrefusal guard (model asks for content -> not used as title):");
+	reset();
+	{
+		const beforeR = renames.length;
+		const refuseNote = addFile("20260709_230000.md", "![[some-other-note]]");
+		mock.responses.push({
+			status: 200,
+			text: "",
+			json: { choices: [{ index: 0, message: { content: "Please provide the note so I can generate a title for you." }, finish_reason: "stop" }] },
+		});
+		await generateForFile(plugin, refuseNote, true);
+		ok("refusal not used as title (not renamed)", renames.length === beforeR, `renames=${renames.length}`);
+		ok("noText notice shown", notices.some((n) => n.includes("usable text") || n.includes("正文")), notices.join(" | "));
+	}
+
 	console.log("\nunreachable (bad port 1235):");
 	settings.baseUrl = "http://127.0.0.1:1235";
 	reset();

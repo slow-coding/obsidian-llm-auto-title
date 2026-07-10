@@ -61,12 +61,25 @@ export class TitlePickerModal extends SuggestModal<string> {
 		el.setText(`${idx + 1}. ${value}`);
 	}
 
+	// Entry point for mouse click AND Enter (Obsidian's Chooser routes both
+	// here). Settle the pick BEFORE close() so it always wins over the cancel
+	// sentinel below — without this, a close-before-onChooseSuggestion ordering
+	// made every click register as "canceled" (keyboard number keys still
+	// worked because their handler settles before calling close()).
+	selectSuggestion(value: string): void {
+		this.settle(value);
+		this.close();
+	}
+
 	onChooseSuggestion(item: string): void {
 		this.settle(item);
 	}
 
+	// Defer the cancel sentinel to a microtask: a synchronous pick (a number
+	// key or selectSuggestion) settles first and wins; only a genuine Esc /
+	// click-away reaches here with nothing settled.
 	onClose(): void {
-		this.settle("");
+		queueMicrotask(() => this.settle(""));
 	}
 
 	/** Resolve exactly once. "" is the cancel sentinel (Esc / click-away). */

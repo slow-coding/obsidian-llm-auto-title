@@ -117,6 +117,11 @@ export class LMStudioClient {
 			// enable_thinking:false which are ignored. Default off = fast & stable.
 			body.reasoning_effort = "none";
 		}
+		if (s.repetitionPenalty !== 1) {
+			// llama.cpp repetition_penalty (LMStudio accepts it on the OpenAI-compat
+			// endpoint). >1 discourages token reuse so the N candidate titles differ.
+			body.repetition_penalty = s.repetitionPenalty;
+		}
 
 		const headers = this.authHeader();
 

@@ -85,6 +85,17 @@ export function stripExtension(name: string): string {
 	return name.replace(/\.(md|markdown)$/i, "");
 }
 
+/** True if a sanitized "title" is really a model refusal / clarification request
+ * rather than a title. This happens when the note has no usable prose (e.g. it
+ * is only an embed `![[…]]`, a bare link, or a near-empty quote): the model
+ * answers "Please provide the note…" / "无法生成…", which must NOT become the
+ * filename. Conservative — only matches unambiguous refusal phrasings. */
+const REFUSAL_TITLE_RE =
+	/\bplease provide\b|unable to (generate|determine|provide|title)|请提供|请补充|无法(生成|提取|确定|命名|提供)/i;
+export function isRefusalTitle(title: string): boolean {
+	return REFUSAL_TITLE_RE.test((title ?? "").trim());
+}
+
 /** Code-point-safe truncation (won't split surrogate pairs / emoji). */
 export function truncate(text: string, maxChars: number): string {
 	if (maxChars <= 0) return text;

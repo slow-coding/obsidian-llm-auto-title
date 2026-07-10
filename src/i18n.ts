@@ -42,6 +42,7 @@ const STRINGS: Record<string, Entry> = {
 	"notice.renameFail": { en: "Rename failed: {err}", zh: "重命名失败：{err}" },
 	"notice.optionsEmpty": { en: "No usable title options; kept the current name.", zh: "没有可用的候选项，已保持当前文件名。" },
 	"notice.optionCanceled": { en: "Canceled; kept the current name.", zh: "已取消，保持当前文件名。" },
+	"notice.noText": { en: "No usable text in this note to title (it may be only an embed / link / quote with no prose); skipped.", zh: "本笔记没有可用于命名的正文（可能只含嵌入 / 链接 / 引用或为空），已跳过。" },
 
 	// ---- model picker ----
 	"modal.pickModel": { en: "Select model…", zh: "选择模型…" },
@@ -128,6 +129,11 @@ const STRINGS: Record<string, Entry> = {
 		en: "How many candidate titles to request (2-5). Fewer may come back if the model repeats or sanitization collapses duplicates.",
 		zh: "请求的候选项数量（2-5）。若模型重复或净化后重名，实际数量可能更少。",
 	},
+	"set.repetitionPenalty.name": { en: "Repetition penalty", zh: "重复惩罚" },
+	"set.repetitionPenalty.desc": {
+		en: "Higher discourages token reuse (llama.cpp repetition_penalty) so titles — especially the N candidates — differ more. 1.0 = off. Raise it if candidates look too similar.",
+		zh: "越高越抑制 token 重复（llama.cpp repetition_penalty），让标题——尤其 N 个候选项——彼此更不同。1.0 = 关闭。候选项太相似时调高。",
+	},
 
 	// ---- settings: scope ----
 	"set.minContent.name": { en: "Min content length", zh: "最小内容长度" },
@@ -210,8 +216,8 @@ export function t(key: string, params?: Record<string, string | number>): string
 }
 
 const DEFAULT_PROMPTS: Record<Lang, string> = {
-	en: "Give this note a concise, descriptive title that is easy to reference from other notes. Output only the title: no explanation, no quotes, no brackets. Match the note's language.",
-	zh: "给这条笔记起一个描述性的标题，便于在其它笔记中引用它。只输出标题本身，不要解释、不要引号、不要方括号，语言与笔记一致。",
+	en: "Give this note a short, specific title that captures its core point — a few words, not a full sentence and not a dry restatement of the content. Make it recognizable when referenced from other notes. Output only the title: no explanation, quotes, brackets, or trailing punctuation. Match the note's language.",
+	zh: "给这条笔记起一个简短、具体的标题，点出核心——几个字/词即可，不要写成完整句子，也不要干巴巴地复述内容；要便于在其它笔记里识别和引用。只输出标题本身，不要解释、引号、方括号或末尾标点，语言与笔记一致。",
 };
 
 /** The localized default system prompt (used when the user leaves the prompt empty). */
