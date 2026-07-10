@@ -1,4 +1,7 @@
-node_modules/
+node_modules/**
+!node_modules/.obsidian-types/
+node_modules/.obsidian-types/*
+!node_modules/.obsidian-types/obsidian.d.ts
 main.js
 *.log
 data.json

@@ -25,7 +25,7 @@
 		],
 		"paths": {
 			"obsidian": [
-				"../vendor/obsidian.d.ts"
+				"../node_modules/.obsidian-types/obsidian.d.ts"
 			]
 		}
 	},
