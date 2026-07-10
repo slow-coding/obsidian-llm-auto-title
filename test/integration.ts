@@ -46,8 +46,10 @@ function addFile(path: string, content: string): any {
 const plugin: any = {
 	settings,
 	unloaded: false,
+	sessionTitles: new Map(),
 	lmstudio: new LMStudioClient(() => settings),
 	app: {
+		workspace: { getLeavesOfType: () => [] },
 		vault: {
 			cachedRead: async (f: any) => files.get(f.path)?.content ?? "",
 			getAbstractFileByPath: (p: string) => files.get(p)?.file ?? null,
@@ -124,6 +126,28 @@ async function main(): Promise<void> {
 	reset();
 	await generateForFile(plugin, note, true);
 	ok("manual triggers generation on any titled note", stats.requestCount >= 1, `calls=${stats.requestCount}`);
+
+	console.log("\nsession dedup (retry until a novel title):");
+	reset();
+	plugin.sessionTitles = new Map();
+	const dedupPath = "20260709_240000.md";
+	plugin.sessionTitles.set(dedupPath, new Set(["existing title"]));
+	const dedupNote = addFile(dedupPath, "some content for testing dedup");
+	// mock: model first echoes the already-used title, then yields a novel one
+	mock.responses.push({
+		status: 200, text: "",
+		json: { choices: [{ index: 0, message: { content: "existing title" }, finish_reason: "stop" }] },
+	});
+	mock.responses.push({
+		status: 200, text: "",
+		json: { choices: [{ index: 0, message: { content: "novel title" }, finish_reason: "stop" }] },
+	});
+	const beforeD = renames.length;
+	await generateForFile(plugin, dedupNote, true);
+	ok("retried past dup and renamed to novel title", renames.length === beforeD + 1, `renames=${renames.length} basename=${dedupNote.basename}`);
+	ok("new basename is the novel title", dedupNote.basename === "novel title", dedupNote.basename);
+	ok("history migrated to new path", plugin.sessionTitles.has("novel title.md"), JSON.stringify([...plugin.sessionTitles.keys()]));
+	ok("old path removed from history", !plugin.sessionTitles.has(dedupPath));
 
 	console.log("\nbudget exhaustion (mocked: empty content + finish=length, reasoning echoes input):");
 	reset();

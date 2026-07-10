@@ -43,6 +43,7 @@ const STRINGS: Record<string, Entry> = {
 	"notice.optionsEmpty": { en: "No usable title options; kept the current name.", zh: "没有可用的候选项，已保持当前文件名。" },
 	"notice.optionCanceled": { en: "Canceled; kept the current name.", zh: "已取消，保持当前文件名。" },
 	"notice.noText": { en: "No usable text in this note to title (it may be only an embed / link / quote with no prose); skipped.", zh: "本笔记没有可用于命名的正文（可能只含嵌入 / 链接 / 引用或为空），已跳过。" },
+	"notice.noNewTitle": { en: "Could not generate a new title after {n} tries (the model keeps repeating); kept the current name.", zh: "尝试 {n} 次后仍无法生成新标题（模型持续重复），已保持当前文件名。" },
 
 	// ---- model picker ----
 	"modal.pickModel": { en: "Select model…", zh: "选择模型…" },
@@ -169,6 +170,10 @@ const STRINGS: Record<string, Entry> = {
 	"prompt.optionsSuffix": {
 		en: "Now provide exactly {n} distinct candidate titles for this note, one per line. No numbering, no quotes, no bullets, no extra text.",
 		zh: "现在请给出 {n} 个互不相同、各自独立的候选标题，每行一个，不要编号、引号、项目符号或任何额外说明。",
+	},
+	"prompt.excludeSuffix": {
+		en: "Do NOT reuse any of these titles you already generated for this note — take a different angle:\n{list}",
+		zh: "不要重复使用以下已经为这条笔记生成过的标题，请换一个不同的角度：\n{list}",
 	},
 
 	// ---- lmstudio errors ----

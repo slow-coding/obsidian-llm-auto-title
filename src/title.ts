@@ -1,9 +1,17 @@
-import { Notice, normalizePath, TAbstractFile, TFile } from "obsidian";
+import { App, MarkdownView, Notice, normalizePath, TAbstractFile, TFile } from "obsidian";
 import type AutoTitlePlugin from "./main";
 import type { AutoTitleSettings } from "./settings";
 import { t } from "./i18n";
 import { compileUserRegex, isRefusalTitle, momentFormatToRegex, sanitizeTitle, stripExtension, uniquePath } from "./util";
 import { pickTitle } from "./titlePicker";
+import type { GenerateOpts } from "./lmstudio";
+
+/** Max attempts to dedup against the session history before giving up (and
+ *  keeping the current name). Each attempt is a full HTTP request, so keep small. */
+const MAX_HISTORY_RETRIES = 3;
+/** Temperature bump per dedup retry (clamped to 0.95). First attempt always
+ *  uses the user's setting (crisp); only collisions raise it to add noise. */
+const RETRY_TEMP_STEP = 0.25;
 
 /** Resolve the active detection regex: custom regex if valid, else the Moment format. null = no valid pattern. */
 export function resolvePattern(s: AutoTitleSettings): RegExp | null {
@@ -45,6 +53,20 @@ export function shouldScanTarget(file: TAbstractFile, s: AutoTitleSettings): boo
 	return inScope(file, s);
 }
 
+/** If the file is open in an editor, return its live (possibly unsaved) text;
+ *  otherwise null (caller falls back to vault.cachedRead). Fixes "content
+ *  pasted just-now not detected": cachedRead reads the on-disk/cached content,
+ *  not what's still in the editor buffer. */
+function liveEditorContent(app: App, file: TFile): string | null {
+	for (const leaf of app.workspace.getLeavesOfType("markdown")) {
+		const view = leaf.view;
+		if (view instanceof MarkdownView && view.file?.path === file.path) {
+			return view.editor.getValue();
+		}
+	}
+	return null;
+}
+
 /**
  * Orchestrate: read → generate → sanitize → dedupe → rename.
  * `manual` only affects user-facing notices (the manual command shows more
@@ -61,13 +83,21 @@ export async function generateForFile(plugin: AutoTitlePlugin, file: TFile, manu
 	if (plugin.unloaded) return;
 
 	let content: string;
-	try {
-		content = await plugin.app.vault.cachedRead(current);
-	} catch (e) {
-		if (manual) {
-			new Notice(t("notice.readFail", { err: e instanceof Error ? e.message : String(e) }), 6000);
+	// Prefer the live editor buffer when the file is open — cachedRead reads the
+	// on-disk content, which is empty/stale right after a paste that hasn't
+	// flushed yet ("content not detected" on a just-pasted note).
+	const live = liveEditorContent(plugin.app, current);
+	if (live !== null) {
+		content = live;
+	} else {
+		try {
+			content = await plugin.app.vault.cachedRead(current);
+		} catch (e) {
+			if (manual) {
+				new Notice(t("notice.readFail", { err: e instanceof Error ? e.message : String(e) }), 6000);
+			}
+			return;
 		}
-		return;
 	}
 	if (content.trim().length < s.minContentLength) {
 		if (manual) new Notice(t("notice.empty"));
@@ -77,11 +107,15 @@ export async function generateForFile(plugin: AutoTitlePlugin, file: TFile, manu
 
 	const notice = new Notice(t("notice.generating"), 0);
 
+	// Session history of titles already generated for THIS file this session —
+	// drives "re-trigger gives a different title". `path` captured above.
+	const history = plugin.sessionTitles.get(path) ?? new Set<string>();
+
 	let title: string;
 	if (s.offerTitleOptions && manual) {
 		// Options path — manual command only. Batch scan (manual === false)
 		// never pops a per-file picker even when the toggle is on.
-		const opt = await plugin.lmstudio.generateTitleOptions(content, s.optionCount);
+		const opt = await plugin.lmstudio.generateTitleOptions(content, s.optionCount, { exclude: [...history] });
 		if (plugin.unloaded) {
 			notice.hide();
 			return;
@@ -101,6 +135,7 @@ export async function generateForFile(plugin: AutoTitlePlugin, file: TFile, manu
 			if (!c || isRefusalTitle(c)) continue;
 			const key = c.toLowerCase();
 			if (seen.has(key)) continue;
+			if (history.has(key)) continue; // skip titles already used this session
 			seen.add(key);
 			cands.push(c);
 		}
@@ -122,32 +157,63 @@ export async function generateForFile(plugin: AutoTitlePlugin, file: TFile, manu
 		}
 		title = chosen;
 	} else {
-		const result = await plugin.lmstudio.generateTitle(content);
-		if (plugin.unloaded) {
-			notice.hide();
-			return;
+		// Single-title path with session dedup: retry (raising temperature) until
+		// the model yields a title not already used for this file this session.
+		title = "";
+		for (let attempt = 0; attempt < MAX_HISTORY_RETRIES && !plugin.unloaded; attempt++) {
+			const opts: GenerateOpts =
+				attempt === 0
+					? { exclude: [...history] }
+					: { exclude: [...history], temperature: Math.min(0.95, s.temperature + RETRY_TEMP_STEP * attempt) };
+			const result = await plugin.lmstudio.generateTitle(content, opts);
+			if (plugin.unloaded) {
+				notice.hide();
+				return;
+			}
+			if (!result.ok) {
+				notice.hide();
+				new Notice(t("notice.fail", { msg: result.message }), 6000);
+				return;
+			}
+			const cand = sanitizeTitle(result.title, s.titleMaxLength);
+			if (!cand) {
+				notice.hide();
+				new Notice(t("notice.titleEmpty"), 6000);
+				return;
+			}
+			if (isRefusalTitle(cand)) {
+				notice.hide();
+				new Notice(t("notice.noText"), 6000);
+				return;
+			}
+			if (!history.has(cand.toLowerCase())) {
+				title = cand; // novel — accept
+				break;
+			}
+			// collided with history — retry with higher temperature + the negative list
 		}
-		if (!result.ok) {
-			notice.hide();
-			new Notice(t("notice.fail", { msg: result.message }), 6000);
-			return;
-		}
-		title = sanitizeTitle(result.title, s.titleMaxLength);
 	}
 
 	if (!title) {
+		// Single-title path exhausted MAX_HISTORY_RETRIES without a novel title
+		// (the model kept repeating). Don't rename, don't record history.
 		notice.hide();
-		new Notice(t("notice.titleEmpty"), 6000);
+		new Notice(t("notice.noNewTitle", { n: MAX_HISTORY_RETRIES }), 6000);
 		return;
 	}
 	if (isRefusalTitle(title)) {
 		// The model answered with a clarification ("Please provide the note…")
 		// because the note has no usable prose (embed/link/empty). Don't let that
-		// become the filename.
+		// become the filename. (Options path already filtered refusals.)
 		notice.hide();
 		new Notice(t("notice.noText"), 6000);
 		return;
 	}
+
+	// Record into session history (current path) — survives whether or not the
+	// rename below succeeds, so a re-trigger keeps avoiding this title.
+	history.add(title.toLowerCase());
+	plugin.sessionTitles.set(path, history);
 
 	// re-fetch again — the generation may have taken a while
 	const latest = plugin.app.vault.getAbstractFileByPath(path);
@@ -178,6 +244,12 @@ export async function generateForFile(plugin: AutoTitlePlugin, file: TFile, manu
 
 	try {
 		await plugin.app.fileManager.renameFile(latest, newPath);
+		// Migrate the session history to the new path so a re-trigger on the
+		// renamed file still avoids this title (the key is the file path).
+		if (newPath !== path) {
+			plugin.sessionTitles.delete(path);
+			plugin.sessionTitles.set(newPath, history);
+		}
 		notice.hide();
 		new Notice(t("notice.renamed", { name: baseName }), 4000);
 	} catch (e) {

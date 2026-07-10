@@ -20,6 +20,16 @@ export type TitleOptionsResult =
 	| { ok: true; titles: string[] }
 	| { ok: false; kind: TitleErrorKind; message: string };
 
+/** Optional per-call overrides for title generation.
+ *  - `exclude`: sanitized titles already used for this note; appended to the
+ *    system prompt as a negative list so the model picks a different angle.
+ *  - `temperature`: overrides the user's setting (used on dedup retries to
+ *    inject sampling noise when the model ignores the negative list). */
+export interface GenerateOpts {
+	exclude?: string[];
+	temperature?: number;
+}
+
 const TIMEOUT_SENTINEL = "__lmstudio_timeout__";
 const NETWORK_RE = /ECONNREFUSED|ENOTFOUND|fetch failed|network error|failed to fetch/i;
 
@@ -62,13 +72,13 @@ export class LMStudioClient {
 	}
 
 	/** Generate a title for the given content. Never throws — returns a TitleResult. */
-	async generateTitle(content: string): Promise<TitleResult> {
+	async generateTitle(content: string, opts?: GenerateOpts): Promise<TitleResult> {
 		// Reasoning models occasionally spiral and emit no content; a second
 		// attempt usually converges. Retry only on budget/empty (not on network
 		// errors, which won't resolve by retrying).
-		let result = await this.attemptTitle(content);
+		let result = await this.attemptTitle(content, opts);
 		if (!result.ok && (result.kind === "budget" || result.kind === "empty")) {
-			result = await this.attemptTitle(content);
+			result = await this.attemptTitle(content, opts);
 		}
 		return result;
 	}
@@ -76,11 +86,11 @@ export class LMStudioClient {
 	/** Generate up to `count` candidate titles in one call. Never throws —
 	 * returns a TitleOptionsResult. Retries once on budget/empty, like
 	 * generateTitle. `count` is clamped to 1-5. */
-	async generateTitleOptions(content: string, count: number): Promise<TitleOptionsResult> {
+	async generateTitleOptions(content: string, count: number, opts?: GenerateOpts): Promise<TitleOptionsResult> {
 		const n = Math.max(1, Math.min(5, Math.round(count)));
-		let result = await this.attemptTitleOptions(content, n);
+		let result = await this.attemptTitleOptions(content, n, opts);
 		if (!result.ok && (result.kind === "budget" || result.kind === "empty")) {
-			result = await this.attemptTitleOptions(content, n);
+			result = await this.attemptTitleOptions(content, n, opts);
 		}
 		return result;
 	}
@@ -92,6 +102,7 @@ export class LMStudioClient {
 	private async rawCompletion(
 		systemContent: string,
 		userContent: string,
+		temperature?: number,
 	): Promise<
 		| { ok: true; content: string; finishReason: string; reasoning: string }
 		| { ok: false; kind: TitleErrorKind; message: string }
@@ -107,7 +118,7 @@ export class LMStudioClient {
 				{ role: "system", content: systemContent },
 				{ role: "user", content: userContent },
 			],
-			temperature: s.temperature,
+			temperature: temperature ?? s.temperature,
 			max_tokens: s.maxTokens,
 			stream: false,
 		};
@@ -171,12 +182,20 @@ export class LMStudioClient {
 		return { ok: true, content, finishReason, reasoning };
 	}
 
-	private async attemptTitle(content: string): Promise<TitleResult> {
+	/** When `exclude` is non-empty, append a negative list of already-used
+	 *  titles to the system prompt so the model picks a different angle. */
+	private appendExclude(systemContent: string, exclude: string[] | undefined): string {
+		if (!exclude || exclude.length === 0) return systemContent;
+		const list = exclude.map((title) => `- ${title}`).join("\n");
+		return `${systemContent}\n\n${t("prompt.excludeSuffix", { list })}`;
+	}
+
+	private async attemptTitle(content: string, opts?: GenerateOpts): Promise<TitleResult> {
 		const s = this.s;
 		const userContent = truncate(content, s.maxContentChars);
-		const systemContent = s.systemPrompt.trim() || defaultSystemPrompt();
+		const systemContent = this.appendExclude(s.systemPrompt.trim() || defaultSystemPrompt(), opts?.exclude);
 
-		const raw = await this.rawCompletion(systemContent, userContent);
+		const raw = await this.rawCompletion(systemContent, userContent, opts?.temperature);
 		if (!raw.ok) return raw;
 
 		if (raw.content) {
@@ -210,13 +229,13 @@ export class LMStudioClient {
 	 * clean lines (no numbering/quotes/bullets), de-duplicated and capped. No
 	 * reasoning fallback here — extractFromReasoning is single-title only; the
 	 * budget/empty retry above covers transient spirals. */
-	private async attemptTitleOptions(content: string, count: number): Promise<TitleOptionsResult> {
+	private async attemptTitleOptions(content: string, count: number, opts?: GenerateOpts): Promise<TitleOptionsResult> {
 		const s = this.s;
 		const userContent = truncate(content, s.maxContentChars);
-		const base = s.systemPrompt.trim() || defaultSystemPrompt();
+		const base = this.appendExclude(s.systemPrompt.trim() || defaultSystemPrompt(), opts?.exclude);
 		const systemContent = `${base}\n\n${t("prompt.optionsSuffix", { n: count })}`;
 
-		const raw = await this.rawCompletion(systemContent, userContent);
+		const raw = await this.rawCompletion(systemContent, userContent, opts?.temperature);
 		if (!raw.ok) return raw;
 		if (!raw.content) {
 			return { ok: false, kind: "empty", message: t("err.emptyResult") };

@@ -9,6 +9,11 @@ export default class AutoTitlePlugin extends Plugin {
 	lmstudio!: LMStudioClient;
 	/** Set on unload so in-flight generations abort before renaming. */
 	unloaded = false;
+	/** Session-level memory: file path → titles already generated for that file
+	 *  this session (lowercased, sanitized). Not persisted; cleared on unload.
+	 *  Drives "re-trigger gives a different title". Migrated to the new path on
+	 *  rename so it survives the filename change. */
+	sessionTitles = new Map<string, Set<string>>();
 
 	async onload(): Promise<void> {
 		await this.loadSettings();

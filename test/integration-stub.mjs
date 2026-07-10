@@ -58,6 +58,10 @@ export class SuggestModal {
 	close() {}
 }
 export class PluginSettingTab {}
+// Exported so esbuild can resolve title.ts's MarkdownView import. Integration
+// tests don't exercise the live-editor path (fake views aren't MarkdownView
+// instances, so liveEditorContent returns null → falls back to cachedRead).
+export class MarkdownView {}
 export class Setting {
 	constructor() {}
 	setName() {

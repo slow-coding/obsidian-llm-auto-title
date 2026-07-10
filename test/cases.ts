@@ -89,6 +89,8 @@ eq("t interpolates {n}", t("notice.scanStart", { n: 3 }), "Titling 3 timestamp n
 eq("t interpolates {done}/{n}", t("notice.scanDone", { done: 2, n: 5 }), "Titled 2/5 timestamp notes");
 eq("unknown key falls back to key", t("nope.notreal"), "nope.notreal");
 eq("default system prompt (en) mentions title", defaultSystemPrompt().toLowerCase().includes("title"), true);
+eq("excludeSuffix interpolates list", t("prompt.excludeSuffix", { list: "- Foo\n- Bar" }).includes("- Foo"), true);
+eq("noNewTitle interpolates n", t("notice.noNewTitle", { n: 3 }).includes("3"), true);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
