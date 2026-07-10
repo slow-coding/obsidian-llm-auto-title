@@ -44,3 +44,15 @@
 ## Obsidian 类型 / scorecard
 
 tsconfig `paths` 把 `obsidian` 指向 `node_modules/.obsidian-types/obsidian.d.ts`，让源码能 type-check 又不让该 .d.ts 被 lint（scorecard ~388 条假阳性的根因修法；详见全局 CLAUDE.md）。`requestUrl` 等都走这个类型。
+
+## 编写 Obsidian 插件的通用规则（checklist）
+
+改/加功能时按这套来，少踩坑：
+
+- **国际化必做**：所有面向用户的字符串（设置名/描述、Notice、命令名、给 LLM 的 prompt 文案）都必须走 `src/i18n.ts` 的 `t()`，每个 key 同时给 `en` + `zh`。不要硬编码用户可见文案，也不要拿字段名/英文兜底当界面文字。
+- **本地 Obsidian 先验证再算完成**：见「本地开发生效」——build + 复制 + 重载，真机跑通才算 done，别只凭 tsc/lint 过就说没问题。
+- **重命名走 `fileManager`**：改名/移动用 `app.fileManager.renameFile`（会自动更新其它笔记里的 `[[链接]]` 和 `![[嵌入]]`），**不要**用 `app.vault.rename`（底层、不更新引用；obsidian.d.ts 里它已标 deprecated 并指向 fileManager）。
+- **原生 UI 优先**：优先用 Obsidian 原生组件（`SuggestModal` / `FuzzySuggestModal` / `Setting` / `Notice` / `Menu`），少自造 HTML，观感和无障碍都更好。选择菜单要支持数字键/快捷键，就在 `Modal` 子类里 `this.scope.register(...)`（scope 在 open 时入栈、close 时出栈，自动清理）。
+- **SuggestModal 的 click/close 竞态**：把"选择"包成 Promise 时，要 override `selectSuggestion(value)` 在 `close()` **之前** settle 结果，并用 `queueMicrotask` 延迟 `onClose` 里的"取消哨兵"。否则点击会先触发 close→onClose→取消，导致**鼠标点击永远判为取消**（键盘能用是因为 handler 自己先 settle 再 close）。见 `src/titlePicker.ts`。
+- **模型输出要防 refusal**：当笔记正文是嵌入/链接/空时，模型会回 "Please provide the note…" 之类——必须用 `isRefusalTitle()` 识别并当空处理，**不能让它变成文件名**。见 `src/title.ts`。
+- **滑块要显式显示数值 / tsc 严格 + lint 规则 / 新 obsidian 导入要补 stub**：见「构建 / 测试 / Lint」。
