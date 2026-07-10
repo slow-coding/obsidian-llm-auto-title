@@ -150,6 +150,42 @@ async function main(): Promise<void> {
 	settings.maxTokens = 1024;
 	settings.enableThinking = false;
 
+	console.log("\ngenerateTitleOptions (mocked multi-line: strip / dedup / cap):");
+	reset();
+	mock.responses.push({
+		status: 200,
+		text: "",
+		json: { choices: [{ index: 0, message: { content: '1. Alpha\n2. "Bravo"\n- Charlie\nalpha\n4. Delta' }, finish_reason: "stop" }] },
+	});
+	{
+		const opt = await plugin.lmstudio.generateTitleOptions("x", 5);
+		ok("options ok", !!opt.ok, JSON.stringify(opt));
+		if (opt.ok) {
+			ok("strips numbering/quotes/bullets", opt.titles[0] === "Alpha" && opt.titles[1] === "Bravo" && opt.titles[2] === "Charlie", JSON.stringify(opt.titles));
+			ok("dedupes case-insensitively (4 of 5 kept)", opt.titles.length === 4 && opt.titles.filter((x: string) => x.toLowerCase() === "alpha").length === 1, JSON.stringify(opt.titles));
+		}
+	}
+	reset();
+	mock.responses.push({
+		status: 200,
+		text: "",
+		json: { choices: [{ index: 0, message: { content: "1. Alpha\n2. Bravo\n3. Charlie" }, finish_reason: "stop" }] },
+	});
+	{
+		const opt = await plugin.lmstudio.generateTitleOptions("x", 2);
+		ok("caps at requested count", !!opt.ok && opt.titles.length === 2, JSON.stringify(opt));
+	}
+	reset();
+	mock.responses.push({
+		status: 200,
+		text: "",
+		json: { choices: [{ index: 0, message: { content: '"1. Quarterly Review"\n"2. Project Update"' }, finish_reason: "stop" }] },
+	});
+	{
+		const opt = await plugin.lmstudio.generateTitleOptions("x", 5);
+		ok("strips numbering inside quotes", !!opt.ok && opt.titles[0] === "Quarterly Review" && opt.titles[1] === "Project Update", JSON.stringify(opt));
+	}
+
 	console.log("\nunreachable (bad port 1235):");
 	settings.baseUrl = "http://127.0.0.1:1235";
 	reset();

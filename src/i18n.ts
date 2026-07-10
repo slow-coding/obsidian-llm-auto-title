@@ -40,12 +40,21 @@ const STRINGS: Record<string, Entry> = {
 	"notice.same": { en: "Title is the same as the current filename.", zh: "标题与当前文件名相同" },
 	"notice.renamed": { en: "Renamed: {name}", zh: "已重命名：{name}" },
 	"notice.renameFail": { en: "Rename failed: {err}", zh: "重命名失败：{err}" },
+	"notice.optionsEmpty": { en: "No usable title options; kept the current name.", zh: "没有可用的候选项，已保持当前文件名。" },
+	"notice.optionCanceled": { en: "Canceled; kept the current name.", zh: "已取消，保持当前文件名。" },
 
 	// ---- model picker ----
 	"modal.pickModel": { en: "Select model…", zh: "选择模型…" },
 	"notice.picked": { en: "Selected: {model}", zh: "已选择：{model}" },
 	"notice.noModels": { en: "No chat models found; load a chat model on the server first.", zh: "未发现 chat 模型，请先在服务端加载一个 chat 模型" },
 	"notice.connFail": { en: "Connection failed: {err}", zh: "连接失败：{err}" },
+
+	// ---- title picker ----
+	"modal.pickTitle": { en: "Choose a title…", zh: "选择一个标题…" },
+	"modal.instr.pick": { en: "Pick candidate", zh: "选择候选项" },
+	"modal.instr.move": { en: "Move", zh: "移动" },
+	"modal.instr.choose": { en: "Choose", zh: "确认" },
+	"modal.instr.cancel": { en: "Cancel", zh: "取消" },
 
 	// ---- settings: headings ----
 	"set.heading.connection": {
@@ -109,6 +118,16 @@ const STRINGS: Record<string, Entry> = {
 		en: "Max characters for the title filename (code-point safe truncation; filesystem safety cap only, normal titles won't hit it).",
 		zh: "标题文件名字符上限（code-point 安全截断，仅作文件系统安全兜底，正常标题不会触及）。",
 	},
+	"set.offerOptions.name": { en: "Offer title options", zh: "提供标题候选项" },
+	"set.offerOptions.desc": {
+		en: "After generating, show a pick-menu of N candidate titles and apply the one you choose. Manual command only — never triggers during batch scan.",
+		zh: "生成标题后弹出 N 个候选项供选择，应用你选中的那个。仅手动命令生效，批量扫描不触发。",
+	},
+	"set.optionCount.name": { en: "Number of title options", zh: "标题候选项数量" },
+	"set.optionCount.desc": {
+		en: "How many candidate titles to request (2-5). Fewer may come back if the model repeats or sanitization collapses duplicates.",
+		zh: "请求的候选项数量（2-5）。若模型重复或净化后重名，实际数量可能更少。",
+	},
 
 	// ---- settings: scope ----
 	"set.minContent.name": { en: "Min content length", zh: "最小内容长度" },
@@ -138,6 +157,12 @@ const STRINGS: Record<string, Entry> = {
 	"re.valid": {
 		en: "✓ Auto-anchored as ^(?:…)$. Note: a custom regex overrides the 'must contain time' protection.",
 		zh: "✓ 自动锚定为 ^(?:…)$；注意：自定义正则会覆盖“必须含时间”的保护。",
+	},
+
+	// ---- prompts (multi-candidate) ----
+	"prompt.optionsSuffix": {
+		en: "Now provide exactly {n} distinct candidate titles for this note, one per line. No numbering, no quotes, no bullets, no extra text.",
+		zh: "现在请给出 {n} 个互不相同、各自独立的候选标题，每行一个，不要编号、引号、项目符号或任何额外说明。",
 	},
 
 	// ---- lmstudio errors ----

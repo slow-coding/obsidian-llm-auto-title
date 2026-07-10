@@ -19,6 +19,8 @@ export interface AutoTitleSettings {
 	customRegex: string;
 	triggerFolders: string;
 	minContentLength: number;
+	offerTitleOptions: boolean;
+	optionCount: number;
 }
 
 export const DEFAULT_SETTINGS: AutoTitleSettings = {
@@ -37,6 +39,8 @@ export const DEFAULT_SETTINGS: AutoTitleSettings = {
 	customRegex: "",
 	triggerFolders: "",
 	minContentLength: 1,
+	offerTitleOptions: false,
+	optionCount: 3,
 };
 
 /** Fuzzy-picker for selecting a chat model from the server's list. */
@@ -252,7 +256,38 @@ export class AutoTitleSettingTab extends PluginSettingTab {
 					})
 			);
 
-		// ---------- scan scope ----------
+		new Setting(containerEl)
+		.setName(t("set.offerOptions.name"))
+		.setDesc(t("set.offerOptions.desc"))
+		.addToggle((toggle) =>
+			toggle.setValue(s.offerTitleOptions).onChange(async (v) => {
+				s.offerTitleOptions = v;
+				await save();
+			})
+		);
+
+	const optionCountSetting = new Setting(containerEl)
+		.setName(t("set.optionCount.name"))
+		.setDesc(t("set.optionCount.desc"));
+	// Show the current value next to the slider. setDynamicTooltip is deprecated,
+	// and the "always inline" value display only ships on newer Obsidian builds,
+	// so render it ourselves to stay version-independent.
+	const optionCountValue = optionCountSetting.controlEl.createSpan({
+		text: String(s.optionCount),
+	});
+	optionCountValue.setCssProps({ marginLeft: "0.5em" });
+	optionCountSetting.addSlider((sl) =>
+		sl.setLimits(2, 5, 1)
+			.setValue(s.optionCount)
+			.onChange(async (v) => {
+				s.optionCount = Math.round(v);
+				optionCountValue.setText(String(s.optionCount));
+				await save();
+			}),
+	);
+	optionCountSetting.controlEl.appendChild(optionCountValue);
+
+	// ---------- scan scope ----------
 		new Setting(containerEl).setName(t("set.heading.scope")).setHeading();
 
 		new Setting(containerEl)

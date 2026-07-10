@@ -42,6 +42,21 @@ export class FuzzySuggestModal {
 	}
 	open() {}
 }
+// Exported so esbuild can resolve titlePicker.ts imports. The title-options
+// picker isn't exercised by these tests (offerTitleOptions is off by default),
+// so a minimal stub suffices; scope.register is included for safety.
+export class SuggestModal {
+	constructor() {}
+	scope = { register() { return {}; } };
+	setPlaceholder() {
+		return this;
+	}
+	setInstructions() {
+		return this;
+	}
+	open() {}
+	close() {}
+}
 export class PluginSettingTab {}
 export class Setting {
 	constructor() {}

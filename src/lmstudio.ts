@@ -16,6 +16,10 @@ export type TitleResult =
 	| { ok: true; title: string }
 	| { ok: false; kind: TitleErrorKind; message: string };
 
+export type TitleOptionsResult =
+	| { ok: true; titles: string[] }
+	| { ok: false; kind: TitleErrorKind; message: string };
+
 const TIMEOUT_SENTINEL = "__lmstudio_timeout__";
 const NETWORK_RE = /ECONNREFUSED|ENOTFOUND|fetch failed|network error|failed to fetch/i;
 
@@ -69,17 +73,38 @@ export class LMStudioClient {
 		return result;
 	}
 
-	private async attemptTitle(content: string): Promise<TitleResult> {
+	/** Generate up to `count` candidate titles in one call. Never throws —
+	 * returns a TitleOptionsResult. Retries once on budget/empty, like
+	 * generateTitle. `count` is clamped to 1-5. */
+	async generateTitleOptions(content: string, count: number): Promise<TitleOptionsResult> {
+		const n = Math.max(1, Math.min(5, Math.round(count)));
+		let result = await this.attemptTitleOptions(content, n);
+		if (!result.ok && (result.kind === "budget" || result.kind === "empty")) {
+			result = await this.attemptTitleOptions(content, n);
+		}
+		return result;
+	}
+
+	/** Shared chat-completion request: build the body, POST (racing the timeout),
+	 * classify network/HTTP/choice errors. Returns the trimmed assistant content,
+	 * finish_reason and reasoning_content on success, or a TitleResult-shaped
+	 * error. Both the single-title and the multi-candidate paths route here. */
+	private async rawCompletion(
+		systemContent: string,
+		userContent: string,
+	): Promise<
+		| { ok: true; content: string; finishReason: string; reasoning: string }
+		| { ok: false; kind: TitleErrorKind; message: string }
+	> {
 		const s = this.s;
 		if (!s.model.trim()) {
 			return { ok: false, kind: "nomodel", message: t("err.nomodel") };
 		}
 
-		const userContent = truncate(content, s.maxContentChars);
 		const body: Record<string, unknown> = {
 			model: s.model,
 			messages: [
-				{ role: "system", content: s.systemPrompt.trim() || defaultSystemPrompt() },
+				{ role: "system", content: systemContent },
 				{ role: "user", content: userContent },
 			],
 			temperature: s.temperature,
@@ -135,23 +160,33 @@ export class LMStudioClient {
 		}
 
 		const message = isObject(choice.message) ? choice.message : {};
-		const content0 = typeof message.content === "string" ? message.content.trim() : "";
+		const content = typeof message.content === "string" ? message.content.trim() : "";
 		const finishReason = typeof choice.finish_reason === "string" ? choice.finish_reason : "";
+		const reasoning = typeof message.reasoning_content === "string" ? message.reasoning_content : "";
+		return { ok: true, content, finishReason, reasoning };
+	}
 
-		if (content0) {
-			return { ok: true, title: content0 };
+	private async attemptTitle(content: string): Promise<TitleResult> {
+		const s = this.s;
+		const userContent = truncate(content, s.maxContentChars);
+		const systemContent = s.systemPrompt.trim() || defaultSystemPrompt();
+
+		const raw = await this.rawCompletion(systemContent, userContent);
+		if (!raw.ok) return raw;
+
+		if (raw.content) {
+			return { ok: true, title: raw.content };
 		}
 
 		// Empty content — reasoning models sometimes spiral and never emit
 		// content (often finish=length) but leave candidate titles in
 		// reasoning_content. Try to salvage one before reporting an error.
 		if (s.reasoningFallback) {
-			const rc = typeof message.reasoning_content === "string" ? message.reasoning_content : "";
-			const extracted = this.extractFromReasoning(rc, userContent);
+			const extracted = this.extractFromReasoning(raw.reasoning, userContent);
 			if (extracted) return { ok: true, title: extracted };
 		}
 
-		if (finishReason === "length") {
+		if (raw.finishReason === "length") {
 			return {
 				ok: false,
 				kind: "budget",
@@ -163,6 +198,30 @@ export class LMStudioClient {
 			kind: "empty",
 			message: t("err.emptyResult"),
 		};
+	}
+
+	/** Request up to `count` candidate titles in one call. The system prompt is
+	 * augmented to ask for N line-separated titles; the response is split into
+	 * clean lines (no numbering/quotes/bullets), de-duplicated and capped. No
+	 * reasoning fallback here — extractFromReasoning is single-title only; the
+	 * budget/empty retry above covers transient spirals. */
+	private async attemptTitleOptions(content: string, count: number): Promise<TitleOptionsResult> {
+		const s = this.s;
+		const userContent = truncate(content, s.maxContentChars);
+		const base = s.systemPrompt.trim() || defaultSystemPrompt();
+		const systemContent = `${base}\n\n${t("prompt.optionsSuffix", { n: count })}`;
+
+		const raw = await this.rawCompletion(systemContent, userContent);
+		if (!raw.ok) return raw;
+		if (!raw.content) {
+			return { ok: false, kind: "empty", message: t("err.emptyResult") };
+		}
+
+		const titles = this.parseTitleLines(raw.content, count);
+		if (titles.length === 0) {
+			return { ok: false, kind: "empty", message: t("err.emptyResult") };
+		}
+		return { ok: true, titles };
 	}
 
 	private authHeader(): Record<string, string> {
@@ -177,7 +236,7 @@ export class LMStudioClient {
 		});
 	}
 
-	private classifyError(e: unknown): TitleResult {
+	private classifyError(e: unknown): { ok: false; kind: TitleErrorKind; message: string } {
 		const msg = e instanceof Error ? e.message : String(e);
 		if (msg.includes(TIMEOUT_SENTINEL)) {
 			return {
@@ -247,5 +306,37 @@ export class LMStudioClient {
 			if (cleaned && cleaned.length <= 200 && !isEchoOrMeta(cleaned)) return cleaned;
 		}
 		return "";
+	}
+
+	/** Split a multi-candidate model response into clean title lines: per line
+	 * strip leading numbering / bullets / wrapping quotes, drop empties, de-dupe
+	 * case-insensitively, cap at `max`. Returns RAW lines (filename-safety is the
+	 * caller's job — sanitizeTitle takes the first line only, so we split first). */
+	private parseTitleLines(raw: string, max: number): string[] {
+		const seen = new Set<string>();
+		const out: string[] = [];
+		for (const line of raw.split(/\r?\n/)) {
+			let cleaned = line.trim();
+			if (!cleaned) continue;
+			// Peel outer wrappers (quotes / numbering / bullets) repeatedly so a
+			// combination like "1. Foo" or 1. "Foo" cleans regardless of order.
+			// Each step only removes chars, so this always reaches a fixed point.
+			for (let guard = 0; guard < 4; guard++) {
+				const before = cleaned;
+				cleaned = cleaned
+					.replace(/^["'“”‘’「『]+|["'“”‘’」』]+$/g, "")
+					.replace(/^\s*\d+[.)]\s*/, "")
+					.replace(/^[-*•]\s*/, "")
+					.trim();
+				if (cleaned === before) break;
+			}
+			if (!cleaned) continue;
+			const key = cleaned.toLowerCase();
+			if (seen.has(key)) continue;
+			seen.add(key);
+			out.push(cleaned);
+			if (out.length >= max) break;
+		}
+		return out;
 	}
 }

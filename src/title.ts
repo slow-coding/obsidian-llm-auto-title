@@ -3,6 +3,7 @@ import type AutoTitlePlugin from "./main";
 import type { AutoTitleSettings } from "./settings";
 import { t } from "./i18n";
 import { compileUserRegex, momentFormatToRegex, sanitizeTitle, stripExtension, uniquePath } from "./util";
+import { pickTitle } from "./titlePicker";
 
 /** Resolve the active detection regex: custom regex if valid, else the Moment format. null = no valid pattern. */
 export function resolvePattern(s: AutoTitleSettings): RegExp | null {
@@ -75,19 +76,65 @@ export async function generateForFile(plugin: AutoTitlePlugin, file: TFile, manu
 	if (plugin.unloaded) return;
 
 	const notice = new Notice(t("notice.generating"), 0);
-	const result = await plugin.lmstudio.generateTitle(content);
 
-	if (plugin.unloaded) {
+	let title: string;
+	if (s.offerTitleOptions && manual) {
+		// Options path — manual command only. Batch scan (manual === false)
+		// never pops a per-file picker even when the toggle is on.
+		const opt = await plugin.lmstudio.generateTitleOptions(content, s.optionCount);
+		if (plugin.unloaded) {
+			notice.hide();
+			return;
+		}
+		if (!opt.ok) {
+			notice.hide();
+			new Notice(t("notice.fail", { msg: opt.message }), 6000);
+			return;
+		}
+		// Sanitize each candidate on its own (sanitizeTitle keeps only the
+		// first line), then de-dupe case-insensitively — sanitization can
+		// collapse two raw lines into the same title.
+		const seen = new Set<string>();
+		const cands: string[] = [];
+		for (const raw of opt.titles) {
+			const c = sanitizeTitle(raw, s.titleMaxLength);
+			if (!c) continue;
+			const key = c.toLowerCase();
+			if (seen.has(key)) continue;
+			seen.add(key);
+			cands.push(c);
+		}
+		if (cands.length === 0) {
+			notice.hide();
+			new Notice(t("notice.optionsEmpty"), 6000);
+			return;
+		}
+		// Generation is done — drop the "Generating…" toast; the modal (when
+		// there's more than one candidate) is the UI now.
 		notice.hide();
-		return;
-	}
-	if (!result.ok) {
-		notice.hide();
-		new Notice(t("notice.fail", { msg: result.message }), 6000);
-		return;
+		// With a single usable candidate there's nothing to pick; otherwise
+		// open the picker (it resolves "" on Esc / click-away).
+		const chosen = cands.length === 1 ? (cands[0] ?? "") : await pickTitle(plugin.app, cands);
+		if (plugin.unloaded) return;
+		if (!chosen) {
+			new Notice(t("notice.optionCanceled"), 6000);
+			return;
+		}
+		title = chosen;
+	} else {
+		const result = await plugin.lmstudio.generateTitle(content);
+		if (plugin.unloaded) {
+			notice.hide();
+			return;
+		}
+		if (!result.ok) {
+			notice.hide();
+			new Notice(t("notice.fail", { msg: result.message }), 6000);
+			return;
+		}
+		title = sanitizeTitle(result.title, s.titleMaxLength);
 	}
 
-	const title = sanitizeTitle(result.title, s.titleMaxLength);
 	if (!title) {
 		notice.hide();
 		new Notice(t("notice.titleEmpty"), 6000);
